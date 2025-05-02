@@ -25,8 +25,8 @@ jobs:
         run: |
           # Define Salt repo details (since Dockerfile fetches .sources, we just need them here for apt-cache)
           SALT_REPO_URI="https://packages.broadcom.com/artifactory/saltproject-deb"
-          # Assuming debian:stable-slim is currently bookworm. Adjust if needed.
-          DEBIAN_CODENAME="bookworm"
+          # Assuming debian:stable-slim is currently stable. Adjust if needed.
+          DEBIAN_CODENAME="stable"
 
           echo "Preparing runner to query package versions..."
           # Prepare the runner environment to query package versions from the Salt repo
