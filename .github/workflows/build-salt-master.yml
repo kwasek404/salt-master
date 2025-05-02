@@ -103,7 +103,7 @@ jobs:
             echo "build_number=1" >> $GITHUB_OUTPUT
           else
             # Find the highest build number
-            HIGHEST_BUILD=$(echo "$TAGS" | grep -oP "$CLEAN_VERSION-(\\d+)" | sed "s/$CLEAN_VERSION-//" | sort -nr | head -n 1)
+            HIGHEST_BUILD=$(echo "$TAGS" | grep -oP "^$CLEAN_VERSION-(\\d+)$" | sed "s/$CLEAN_VERSION-//" | sort -nr | head -n 1)
             NEXT_BUILD=$((HIGHEST_BUILD + 1))
             echo "Found existing tags. Next build number: $NEXT_BUILD"
             echo "build_number=$NEXT_BUILD" >> $GITHUB_OUTPUT
