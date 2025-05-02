@@ -18,7 +18,8 @@ RUN apt-get update && \
     curl \
     gnupg \
     apt-transport-https \
-    ca-certificates && \
+    ca-certificates \
+    binutils && \
     # Add the Salt Project (Broadcom) GPG key
     # Key URL taken from the official Salt install guide
     curl -fsSL https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public | tee /etc/apt/keyrings/salt-archive-keyring.pgp && \
@@ -29,6 +30,8 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends salt-master=${SALT_VERSION} && \
     # (Optional) Check the installed version - mainly for build logs
     salt-master --version && \
+    # Install pygit2 for git integration
+    salt-pip install pygit2 && \
     # Clean up APT cache to reduce image size
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
