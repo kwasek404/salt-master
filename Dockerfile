@@ -26,7 +26,7 @@ RUN apt-get update && \
     curl -fsSL https://github.com/saltstack/salt-install-guide/releases/latest/download/salt.sources | tee /etc/apt/sources.list.d/salt.sources && \
     # Update package list and install salt-master (latest available version from the repo)
     apt-get update && \
-    apt-get install -y --no-install-recommends salt-master==${SALT_VERSION} && \
+    apt-get install -y --no-install-recommends salt-master=${SALT_VERSION} && \
     # (Optional) Check the installed version - mainly for build logs
     salt-master --version && \
     # Clean up APT cache to reduce image size
