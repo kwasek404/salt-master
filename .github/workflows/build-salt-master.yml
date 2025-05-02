@@ -1,0 +1,111 @@
+name: Build and Push Salt Master Docker Image
+
+on:
+  push:
+    branches: [ main ] # Trigger on push to the main branch
+  schedule:
+    # Trigger daily at 08:00 UTC (10:00 AM CEST / 9:00 AM CET)
+    - cron: '0 8 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+# Permissions required to read the repository and write to GHCR
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build_and_push:
+    runs-on: ubuntu-latest # Use the latest Ubuntu runner
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine latest Salt version
+        id: salt-info # Give the step an ID to reference its outputs
+        run: |
+          # Define Salt repo details (since Dockerfile fetches .sources, we just need them here for apt-cache)
+          SALT_REPO_URI="https://packages.broadcom.com/artifactory/saltproject-deb"
+          # Assuming debian:stable-slim is currently bookworm. Adjust if needed.
+          DEBIAN_CODENAME="bookworm"
+
+          echo "Preparing runner to query package versions..."
+          # Prepare the runner environment to query package versions from the Salt repo
+          sudo apt-get update
+          sudo apt-get install -y curl gnupg apt-transport-https ca-certificates
+
+          echo "Adding Salt GPG key on runner..."
+          # Add the Salt GPG key on the runner
+          # The key needs to be available at the path specified in the .sources file for apt commands
+          curl -fsSL https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public | sudo tee /etc/apt/keyrings/salt-archive-keyring.pgp > /dev/null
+
+          echo "Creating temporary sources list on runner..."
+          # Create a temporary sources.list file on the runner to query package info
+          # Note: We use the direct deb line here since the Dockerfile fetches the actual .sources file later
+          echo "deb [signed-by=/etc/apt/keyrings/salt-archive-keyring.pgp arch=amd64] ${SALT_REPO_URI} ${DEBIAN_CODENAME} main" | sudo tee /etc/apt/sources.list.d/salt-temp.list
+
+          echo "Updating APT package list using temporary source..."
+          # Update APT using only the temporary sources file
+          sudo apt-get update -o Dir::Etc::sourcelist="/etc/apt/sources.list.d/salt-temp.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
+
+          echo "Querying latest salt-master version..."
+          # Get the latest available full package version (e.g., 3007.1-1)
+          LATEST_VERSION_FULL=$(apt-cache policy salt-master | grep Candidate | awk '{print $2}')
+          if [ -z "$LATEST_VERSION_FULL" ]; then
+            echo "::error::Could not find candidate salt-master version!"
+            exit 1
+          fi
+          echo "Latest Full Salt Master Package Version: ${LATEST_VERSION_FULL}"
+
+          # Get the clean version (e.g., 3007.1) for Docker image tagging
+          LATEST_VERSION_CLEAN=$(echo $LATEST_VERSION_FULL | sed 's/-[0-9]*$//')
+          echo "Latest Clean Salt Master Version for Tag: ${LATEST_VERSION_CLEAN}"
+
+          # Set the FULL version as an env var for the build-arg
+          echo "SALT_INSTALL_VERSION=${LATEST_VERSION_FULL}" >> $GITHUB_ENV
+          # Set the CLEAN version as a step output for the metadata action
+          echo "clean_version=${LATEST_VERSION_CLEAN}" >> $GITHUB_OUTPUT
+          # Also output the full version in case needed elsewhere
+          echo "full_version=${LATEST_VERSION_FULL}" >> $GITHUB_OUTPUT
+
+
+          echo "Cleaning up runner..."
+          # Clean up the temporary file and restore runner's APT state
+          sudo rm /etc/apt/sources.list.d/salt-temp.list
+          sudo apt-get update # Run update again to refresh with default sources
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # Image name in GHCR (uses your specific username/repo)
+          images: ghcr.io/kwasek404/salt-master
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            # Use the CLEAN version for the image tag
+            type=raw,value=${{ steps.salt-info.outputs.clean_version }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Pass the FULL package version needed by apt-get install ...==${SALT_VERSION}
+          build-args: |
+            SALT_VERSION=${{ env.SALT_INSTALL_VERSION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
