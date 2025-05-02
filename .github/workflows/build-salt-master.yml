@@ -91,25 +91,37 @@ jobs:
 
       - name: Check existing tags and determine build number
         id: check_tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_OWNER: "kwasek404"
+          PACKAGE_NAME: "salt-master"
+          CLEAN_VERSION: ${{ steps.salt-info.outputs.clean_version }}
         run: |
-          IMAGE_NAME=ghcr.io/kwasek404/salt-master
-          CLEAN_VERSION=${{ steps.salt-info.outputs.clean_version }}
-          
-          # Try to get existing tags for this version
-          TAGS=$(ghcr tag ls $IMAGE_NAME --match "$CLEAN_VERSION-*" --limit 100 --token ${{ secrets.GITHUB_TOKEN }} || echo "")
-          
+          echo "Determining next build number for version: ${CLEAN_VERSION}"
+          echo "Package: container/${PACKAGE_NAME} owned by ${IMAGE_OWNER}"
+          API_PATH="users/${IMAGE_OWNER}/packages/container/${PACKAGE_NAME}/versions"
+
+          echo "Fetching tags from API: ${API_PATH}"
+          TAGS=$(gh api --paginate -X GET "${API_PATH}?per_page=100" -q '.[] | .metadata.container.tags[]?' | grep "^${CLEAN_VERSION}-" || echo "")
+
           if [[ -z "$TAGS" ]]; then
-            echo "No existing tags found for version $CLEAN_VERSION. Starting build number at 1."
+            echo "No existing tags found matching prefix ${CLEAN_VERSION}-. Starting build number at 1."
             echo "build_number=1" >> $GITHUB_OUTPUT
           else
-            # Find the highest build number
-            HIGHEST_BUILD=$(echo "$TAGS" | grep -oP "^$CLEAN_VERSION-(\\d+)$" | sed "s/$CLEAN_VERSION-//" | sort -nr | head -n 1 || echo 0)
-            if [[ -z "$HIGHEST_BUILD" ]]; then
-              NEXT_BUILD=1
-            else
-              NEXT_BUILD=$((HIGHEST_BUILD + 1))
+            echo "Found existing tags matching prefix ${CLEAN_VERSION}-. Determining highest build number."
+            # Use grep, sed, sort, head to extract the highest build number from matching tags.
+            # The grep pattern is more precise: it must match <CLEAN_VERSION>-<number>.
+            # || echo 0 ensures that HIGHEST_BUILD will be 0 if no tag matches the format exactly with a number.
+            HIGHEST_BUILD=$(echo "$TAGS" | grep -oP "^${CLEAN_VERSION}-(\\d+)$" | sed "s/^${CLEAN_VERSION}-//" | sort -nr | head -n 1 || echo 0)
+
+            # Sprawdzenie czy HIGHEST_BUILD jest poprawną liczbą (choć || echo 0 powinno to zapewnić)
+            if ! [[ "$HIGHEST_BUILD" =~ ^[0-9]+$ ]]; then
+                echo "Warning: Could not determine highest build number from tags. Defaulting to 0."
+                HIGHEST_BUILD=0
             fi
-            echo "Found existing tags. Highest build: $HIGHEST_BUILD, Next build number: $NEXT_BUILD"
+
+            NEXT_BUILD=$((HIGHEST_BUILD + 1))
+            echo "Highest existing build number found: $HIGHEST_BUILD. Next build number: $NEXT_BUILD"
             echo "build_number=$NEXT_BUILD" >> $GITHUB_OUTPUT
           fi
 
