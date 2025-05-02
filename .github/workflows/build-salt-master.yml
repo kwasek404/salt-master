@@ -63,6 +63,9 @@ jobs:
           # Set the FULL version as an env var for the build-arg
           echo "SALT_INSTALL_VERSION=${LATEST_VERSION_FULL}" >> $GITHUB_ENV
           # Set the CLEAN version as a step output for the metadata action
+          # Initialize build number to 1 for the first build of this version
+          echo "build_number=1" >> $GITHUB_OUTPUT
+
           echo "clean_version=${LATEST_VERSION_CLEAN}" >> $GITHUB_OUTPUT
           # Also output the full version in case needed elsewhere
           echo "full_version=${LATEST_VERSION_FULL}" >> $GITHUB_OUTPUT
@@ -86,6 +89,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check existing tags and determine build number
+        id: check_tags
+        run: |
+          IMAGE_NAME=ghcr.io/kwasek404/salt-master
+          CLEAN_VERSION=${{ steps.salt-info.outputs.clean_version }}
+          
+          # Try to get existing tags for this version
+          TAGS=$(ghcr tag ls $IMAGE_NAME --match "$CLEAN_VERSION-*" --limit 100 --token ${{ secrets.GITHUB_TOKEN }} || echo "")
+          
+          if [[ -z "$TAGS" ]]; then
+            echo "No existing tags found for version $CLEAN_VERSION. Starting build number at 1."
+            echo "build_number=1" >> $GITHUB_OUTPUT
+          else
+            # Find the highest build number
+            HIGHEST_BUILD=$(echo "$TAGS" | grep -oP "$CLEAN_VERSION-(\\d+)" | sed "s/$CLEAN_VERSION-//" | sort -nr | head -n 1)
+            NEXT_BUILD=$((HIGHEST_BUILD + 1))
+            echo "Found existing tags. Next build number: $NEXT_BUILD"
+            echo "build_number=$NEXT_BUILD" >> $GITHUB_OUTPUT
+          fi
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
@@ -95,10 +118,12 @@ jobs:
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             # Use the CLEAN version for the image tag
-            type=raw,value=${{ steps.salt-info.outputs.clean_version }}
+            type=raw,value=${{ steps.salt-info.outputs.clean_version }}-latest
+            type=raw,value=${{ steps.salt-info.outputs.clean_version }}-${{ steps.check_tags.outputs.build_number }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
+        if: ${{ github.event_name != 'schedule' || always() }} # Always build on push or manual trigger
         with:
           context: .
           push: true
