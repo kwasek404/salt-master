@@ -19,7 +19,8 @@ RUN apt-get update && \
     gnupg \
     apt-transport-https \
     ca-certificates \
-    binutils && \
+    binutils \
+    patchelf && \
     # Add the Salt Project (Broadcom) GPG key
     # Key URL taken from the official Salt install guide
     curl -fsSL https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public | tee /etc/apt/keyrings/salt-archive-keyring.pgp && \
