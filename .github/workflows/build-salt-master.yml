@@ -100,7 +100,7 @@ jobs:
           echo "Determining next build number for version: ${CLEAN_VERSION}"
           echo "Package: container/${PACKAGE_NAME} owned by ${IMAGE_OWNER}"
           API_PATH="users/${IMAGE_OWNER}/packages/container/${PACKAGE_NAME}/versions"
-
+          
           echo "Fetching tags from API: ${API_PATH}"
           TAGS=$(gh api --paginate -X GET "${API_PATH}?per_page=100" -q '.[] | .metadata.container.tags[]?' | grep "^${CLEAN_VERSION}-" || echo "")
 
@@ -124,6 +124,20 @@ jobs:
             echo "Highest existing build number found: $HIGHEST_BUILD. Next build number: $NEXT_BUILD"
             echo "build_number=$NEXT_BUILD" >> $GITHUB_OUTPUT
           fi
+
+          if [[ "${{ github.event_name }}" == "schedule" ]] && [[ "$HIGHEST_BUILD" -ge 1 ]]; then
+            echo "Image with build number 1 already exists for version ${CLEAN_VERSION}. Skipping build."
+            echo "skip_build=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo "This is the first scheduled build for version ${CLEAN_VERSION}."
+            echo "build_number=1" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Skip build if necessary
+        if: steps.check_tags.outputs.skip_build == 'true'
+        run: |
+          echo "Skipping the rest of the workflow because a scheduled build with build number 1 already exists."
+          exit 78 # Use an exit code that indicates a skipped job
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
