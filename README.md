@@ -11,6 +11,10 @@ This project provides a Docker image for Salt Master, based on `debian:stable-sl
 * **Debian Base:** Based on `debian:stable-slim`.
 * **Automation:** Build and publish process is fully automated using GitHub Actions.
 * **GHCR:** Images are published to GitHub Container Registry (GHCR).
+* **Salt Master Management:** Uses Supervisor to manage the `salt-master` process.
+* **Web API for Updates:** Includes a Flask-based web API for triggering `git_pillar` and `fileserver` updates via HTTP requests to the `/update` endpoint.
+* **uWSGI:** Employs uWSGI to serve the Flask application.
+* **Retry Mechanism:** The update API includes a retry mechanism for handling temporary failures when executing salt commands.
 
 ## Usage
 
@@ -22,3 +26,12 @@ You can pull the latest image using:
 
 ```bash
 docker pull ghcr.io/kwasek404/salt-master:latest
+```
+
+### Building the Image Locally
+
+To build the image locally, you can use the following command:
+
+```bash
+docker build -t salt-master --build-arg SALT_VERSION=3007.1 .
+```
