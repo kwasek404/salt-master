@@ -28,7 +28,7 @@ def run_command_with_retry(command, max_retries=10, retry_delay=1):
                 time.sleep(retry_delay)
     return result
 
-@app.route('/update', methods=['GET'])
+@app.route('/update', methods=['GET', 'POST'])
 def update():
     """
     Endpoint /update that performs git_pillar and fileserver updates.
