@@ -41,10 +41,14 @@ RUN apt-get update && \
     salt-master --version && \
     # Install pygit2 for git integration
     # See https://github.com/saltstack/salt/issues/66590 version 1.15
-    salt-pip install pygit2==1.15 && \
+    # salt-pip install pygit2==1.15 && \
+    salt-pip install pygit2 && \
     # Clean up APT cache to reduce image size
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Mod salt homedir for env related files
+RUN usermod -d /etc/salt/homedir/ salt
 
 # Create a user for uwsgi
 RUN useradd -r -m uwsgi_user && \
