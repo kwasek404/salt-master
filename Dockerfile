@@ -41,8 +41,8 @@ RUN apt-get update && \
     salt-master --version && \
     # Install pygit2 for git integration
     # See https://github.com/saltstack/salt/issues/66590 version 1.15
-    # salt-pip install pygit2==1.15 && \
-    salt-pip install pygit2 && \
+    salt-pip install pygit2==1.14.1 && \
+    # salt-pip install pygit2 && \
     # Clean up APT cache to reduce image size
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
